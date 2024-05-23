@@ -1,0 +1,202 @@
+#include <iostream>
+#include <Box2D/Box2D.h>
+#include <SDL2/SDL.h>
+
+const float32 WORLD_WIDTH = 100.0f;
+const float32 WORLD_HEIGHT = 100.0f;
+const float32 SCALE = 10.0f;
+
+void CreateBox(b2World& world, float32 x, float32 y, float32 hx, float32 hy, bool dynamic = true) {
+    b2BodyDef bodyDef;
+    if (dynamic)
+        bodyDef.type = b2_dynamicBody;
+    bodyDef.position.Set(x, y);
+    b2Body* body = world.CreateBody(&bodyDef);
+
+    b2PolygonShape shape;
+    shape.SetAsBox(hx, hy);
+
+    b2FixtureDef fixtureDef;
+    fixtureDef.shape = &shape;
+    fixtureDef.density = 1.0f;
+    fixtureDef.friction = 0.3f;
+    fixtureDef.restitution = 0.5f;
+    body->CreateFixture(&fixtureDef);
+}
+
+void CreateJoint(b2World& world, b2Body* bodyA, b2Body* bodyB, float32 anchorAX, float32 anchorAY, float32 anchorBX, float32 anchorBY) {
+    b2RevoluteJointDef jointDef;
+    jointDef.bodyA = bodyA;
+    jointDef.bodyB = bodyB;
+    jointDef.localAnchorA.Set(anchorAX, anchorAY);
+    jointDef.localAnchorB.Set(anchorBX, anchorBY);
+    jointDef.collideConnected = false;
+    world.CreateJoint(&jointDef);
+}
+
+int main(int argc, char* argv[]) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
+        return 1;
+    }
+
+    SDL_Window* window = SDL_CreateWindow("Ragdoll",
+                                          100, 100, 800, 600, SDL_WINDOW_SHOWN);
+    if (window == nullptr) {
+        std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (renderer == nullptr) {
+        SDL_DestroyWindow(window);
+        std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return 1;
+    }
+
+    b2Vec2 gravity(0.0f, -9.8f);
+    b2World world(gravity);
+
+    // Crear partes del ragdoll
+    // Cabeza
+    b2BodyDef headDef;
+    headDef.type = b2_dynamicBody;
+    headDef.position.Set(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f + 5.0f);
+    b2Body* head = world.CreateBody(&headDef);
+    b2CircleShape headShape;
+    headShape.m_radius = 1.0f;
+    b2FixtureDef headFixtureDef;
+    headFixtureDef.shape = &headShape;
+    headFixtureDef.density = 1.0f;
+    headFixtureDef.friction = 0.3f;
+    headFixtureDef.restitution = 0.5f;
+    head->CreateFixture(&headFixtureDef);
+
+    // Torso
+    b2BodyDef torsoDef;
+    torsoDef.type = b2_dynamicBody;
+    torsoDef.position.Set(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
+    b2Body* torso = world.CreateBody(&torsoDef);
+    b2PolygonShape torsoShape;
+    torsoShape.SetAsBox(1.5f, 2.0f);
+    b2FixtureDef torsoFixtureDef;
+    torsoFixtureDef.shape = &torsoShape;
+    torsoFixtureDef.density = 1.0f;
+    torsoFixtureDef.friction = 0.3f;
+    torsoFixtureDef.restitution = 0.5f;
+    torso->CreateFixture(&torsoFixtureDef);
+
+    // Brazos
+    b2Body* leftArm = nullptr;
+    b2Body* rightArm = nullptr;
+    {
+        b2BodyDef armDef;
+        armDef.type = b2_dynamicBody;
+        armDef.position.Set(WORLD_WIDTH / 2.0f - 2.5f, WORLD_HEIGHT / 2.0f);
+        leftArm = world.CreateBody(&armDef);
+        armDef.position.Set(WORLD_WIDTH / 2.0f + 2.5f, WORLD_HEIGHT / 2.0f);
+        rightArm = world.CreateBody(&armDef);
+
+        b2PolygonShape armShape;
+        armShape.SetAsBox(0.5f, 1.5f);
+
+        b2FixtureDef armFixtureDef;
+        armFixtureDef.shape = &armShape;
+        armFixtureDef.density = 1.0f;
+        armFixtureDef.friction = 0.3f;
+        armFixtureDef.restitution = 0.5f;
+
+        leftArm->CreateFixture(&armFixtureDef);
+        rightArm->CreateFixture(&armFixtureDef);
+    }
+
+    // Piernas
+    b2Body* leftLeg = nullptr;
+    b2Body* rightLeg = nullptr;
+    {
+        b2BodyDef legDef;
+        legDef.type = b2_dynamicBody;
+        legDef.position.Set(WORLD_WIDTH / 2.0f - 1.0f, WORLD_HEIGHT / 2.0f - 4.0f);
+        leftLeg = world.CreateBody(&legDef);
+        legDef.position.Set(WORLD_WIDTH / 2.0f + 1.0f, WORLD_HEIGHT / 2.0f - 4.0f);
+        rightLeg = world.CreateBody(&legDef);
+
+        b2PolygonShape legShape;
+        legShape.SetAsBox(0.75f, 2.0f);
+
+        b2FixtureDef legFixtureDef;
+        legFixtureDef.shape = &legShape;
+        legFixtureDef.density = 1.0f;
+        legFixtureDef.friction = 0.3f;
+        legFixtureDef.restitution = 0.5f;
+
+        leftLeg->CreateFixture(&legFixtureDef);
+        rightLeg->CreateFixture(&legFixtureDef);
+    }
+
+    // Crear las juntas
+    CreateJoint(world, head, torso, 0, -1.0f, 0, 2.0f);
+    CreateJoint(world, leftArm, torso, 0.5f, -1.5f, 1.5f, 1.0f);
+    CreateJoint(world, rightArm, torso, -0.5f, -1.5f, -1.5f, 1.0f);
+    CreateJoint(world, leftLeg, torso, 0.5f, -2.0f, 1.0f, -2.0f);
+    CreateJoint(world, rightLeg, torso, -0.5f, -2.0f, -1.0f, -2.0f);
+
+    bool quit = false;
+    SDL_Event e;
+
+    while (!quit) {
+        while (SDL_PollEvent(&e) != 0) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            }
+        }
+
+        world.Step(1.0f / 60.0f, 6, 2);
+
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        SDL_RenderClear(renderer);
+
+        auto drawBody = [&](b2Body* body) {
+            for (b2Fixture* f = body->GetFixtureList(); f; f = f->GetNext()) {
+                if (f->GetType() == b2Shape::e_polygon) {
+                    b2PolygonShape* poly = (b2PolygonShape*)f->GetShape();
+                    for (int i = 0; i < poly->m_count; ++i) {
+                        b2Vec2 point = body->GetWorldPoint(poly->m_vertices[i]);
+                        SDL_Rect rect = {
+                            (int)(point.x * 800.0f / WORLD_WIDTH),
+                            (int)(600 - point.y * 600.0f / WORLD_HEIGHT),
+                            2, 2
+                        };
+                        SDL_RenderFillRect(renderer, &rect);
+                    }
+                } else if (f->GetType() == b2Shape::e_circle) {
+                    b2CircleShape* circle = (b2CircleShape*)f->GetShape();
+                    b2Vec2 point = body->GetWorldPoint(circle->m_p);
+                    SDL_Rect rect = {
+                        (int)(point.x * 800.0f / WORLD_WIDTH) - (int)circle->m_radius,
+                        (int)(600 - point.y * 600.0f / WORLD_HEIGHT) - (int)circle->m_radius,
+                        (int)circle->m_radius * 2, (int)circle->m_radius * 2
+                    };
+                    SDL_RenderFillRect(renderer, &rect);
+                }
+            }
+        };
+
+        drawBody(head);
+        drawBody(torso);
+        drawBody(leftArm);
+        drawBody(rightArm);
+        drawBody(leftLeg);
+        drawBody(rightLeg);
+
+        SDL_RenderPresent(renderer);
+    }
+
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+}
